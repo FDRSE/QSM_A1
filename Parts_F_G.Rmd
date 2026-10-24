@@ -3,8 +3,8 @@ title: "QSM I Assignment 1, Question 1"
 author: "Susana Casanova, Francis McAdie, Cai Stead, Daisy Xiao"
 date: "`r Sys.Date()`"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -66,17 +66,18 @@ print(unclass(ct), digits = 10)
 | Variable | Coefficient ($\hat{\beta}$) | Regular OLS SE | Regular $p$-val | Robust (HC0) SE | Robust $p$-val | Difference in SE
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **(Intercept)** | -2,363,512.79 | 259,479.07 | $< 0.001$ | 281,424.56 | $< 0.001$ | 21,945.49 |
-| **Km** | -0.0372 | 0.0095 | $< 0.001$ | 0.0106 | $< 0.001$ |  0.0011 |
+| **Km** | -0.0372 | 0.0099 | $< 0.001$ | 0.0106 | $< 0.001$ |  0.0007 |
 | **HP** | 77.74 | 7.37 | $< 0.001$ | 9.43 | $< 0.001$ | 2.06 |
 | **Year** | 1,189.33 | 129.68 | $< 0.001$ | 140.67 | $< 0.001$ | 10.99 |
 | **Gas** | -3,964.36 | 956.82 | $< 0.001$ | 939.31 | $< 0.001$ | -17.51 |
 
 ### Findings
-Coefficient estimates and $R^2$ ($85.91\%$) remain identical under both methods.
-Accounting for heteroskedasticity increases standard errors for $\text{Km}$, $\text{HP}$, and $\text{Year}$, showing how the SE of the variables can  vary for observation.
+Coefficient estimates and $R^2$ ($85.95\%$) remain identical under both methods.
+Accounting for heteroskedasticity means that we allow for the variance of the error term to differ across observations so the usual OLS formula misstates the true sampling variability of the estimates.
 
-Because larger SEs give smaller t-statistics, the robust p-values are higher. However, looking at the robust p-values, we can see that they still remain under 0.01, meaning we will reject the null hypothesis that the coefficients value is zero, with a significance of up to 1%.
+The robust standard errors are larger for Km and the Year (by about 7 - 8%) and for HP (by about 28%). Their t-statistics therefore fall and their p-values rise. For Gas, the robust SE is marginally smaller (−1.8%), so its p-value falls slightly.
 
+Overall, the differences are small so every coefficient remains significant at the 1% level under robust SEs, so our conclusions on significance do not change.
 ---
 
 ## (g) Executive Report for Used-Car Sales Management
@@ -96,19 +97,20 @@ Our econometric regression analysis ($R^2 = 85.9\%$) indicates that while mileag
 ### Statistical Findings & Actionable Recommendations
 
 1. **Prioritize Diesel Inventory Sourcing**
-   - *Statistical Evidence:* Holding mileage, power, and age constant, we can be very confident gasoline cars sell for around **€4,210 less** than equivalent diesel models ($p < 0.001$).
-   - *Action:* Focus on buying diesel vehicles, but only in cases where they are **€4,210** less than their equivalent gasoline counterparts. Similarly, don't buy  gasoline cars that are valued at more **€4,210** less than their gasoline counterparts.
-
+   - *Statistical Evidence:* Holding mileage, power, and age constant, we can be very confident gasoline cars sell for around **€3,964 less** than equivalent diesel models ($p < 0.001$).
+   - *Action:* When buying stock, a diesel is the better purchase as long as it costs us less than about **€4,000** more than an equivalent petrol car, because we can expect to recover that premium when we sell.  When pricing our own stock, diesel cars can carry an asking price around **€4,000** above comparable petrol cars.
+   
 2. **Market High-Horsepower Trims Prominently**
-   - *Statistical Evidence:* Each additional unit of horsepower increases selling price by **€78.43** ($p < 0.001$).
+   - *Statistical Evidence:* Each additional unit of horsepower increases selling price by **€77.74** ($p < 0.001$).
    - *Action:* If cars have a higher HP, be sure to use this as a markup premium, as we have seen that customers consistently pay more for cars with higher horsepower.
 
 3. **Value Model Age Over Low Mileage**
-   - *Statistical Evidence:* Each year newer adds around **€1,057** to car price ($p < 0.001$). When comparing this to how the price decreases with kilometres driven we found that a vehicle  which is **4 years newer with 20,000 more kilometers sells for around €3,500 more** than an older car with lower mileage ($p = 0.0001$).
-   - *Action:* When sourcing stock, prioritize newer model years even if they carry moderately higher mileage over older, low kilometres units.
+   - *Statistical Evidence:* Each year newer adds around **€1,189** to car price ($p < 0.001$), while each 1000 km takes off around **€37**. This means that one extra design year is therefore worth roughly as much as 32,000 fewer kilometres. 
+   
+   - *Action:* When sourcing stock, prioritize newer model years even if they carry moderately higher mileage over older, low kilometres units. When pricing, don’t discount newer cars heavily for high mileage, because buyers pay mainly for design year.
 
-4. **Avoid Non-Essential Cosmetic Features**
-   - *Statistical Evidence:* Optional features including CD players, alloy wheels, air conditioning, and metallic paint **do not display statistically significant individual price premiums** ($p > 0.05$). 
-   - *Action:* Do not allocate funding to retrofit cosmetic accessories, as buyers do not pay a statistically significant premium for these additions.
+4. **Avoid Paying for Non-Essential Additional Features**
+   - *Statistical Evidence:* Optional features including CD players, alloy wheels, air conditioning, ABS, air bags and metallic paint **do not display statistically significant individual price premiums** ($p > 0.05$), either individually or when combined. 
+   - *Action:* Do not allocate funding to retrofit accessories, as buyers do not pay a statistically significant premium for these additions.
 
 ---
