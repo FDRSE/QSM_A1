@@ -1,0 +1,102 @@
+---
+title: 'QSM I Assignment 1, Question 1'
+subtitle: 'Group names: Susana Casanova, Francis McAdie, Cai Stead, Daisy Xiao'
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 7, fig.height = 4)
+```
+
+---
+
+## Packages and loading the data
+
+```{r packages}
+library(readxl)    # reads Excel files
+cars <- as.data.frame(read_excel("QSM_A1/data_problemset1.xls", sheet = "Car Prices"))
+names(cars) <- c("CC", "HP", "Year", "Km", "Gas", "ABS", "ABD",
+                 "CD", "AW", "AC", "MP", "Price")
+colSums(is.na(cars))
+```
+
+# (a) Simple model with kilometers as explanatory variable
+
+## The model
+
+A simple model where the only explanatory variable is kilometers:
+
+$$Price_i = \beta_0 + \beta_1\,Km_i + \varepsilon_i$$
+
+## Code
+
+```{r a-model}
+m1 <- lm(Price ~ Km, data = cars)
+summary(m1)
+```
+
+```{r a-store, include=FALSE}
+s_a <- summary(m1)
+b0 <- coef(m1)[1]
+b1 <- coef(m1)[2]
+t0 <- s_a$coefficients[1, 3]
+t1 <- s_a$coefficients[2, 3]
+```
+
+## Interpretation of output
+
+**Parameter values**
+
+* **Slope, $\hat\beta_1$ = `r round(b1, 4)`.** Each extra kilometre lowers the expected price by about `r round(-b1, 3)` euros, so every 10,000 km costs about `r format(round(-b1*10000), big.mark=",")` euros.
+* **Intercept, $\hat\beta_0$ = `r format(round(b0), big.mark=",")`.** The predicted price of a car with 0 km, roughly a nearly new car. But only `r sum(cars$Km < 10000)` car has under 10,000 km, so this is an extrapolation and not very meaningful on its own.
+
+**T-statistics: Are the parameters significant?**
+
+The t-statistic tests $H_0: \beta_j = 0$ (the variable has no effect):
+
+$$t = \frac{\hat\beta_j}{SE(\hat\beta_j)}$$
+
+It counts how many standard errors the estimate lies from zero. If $|t| > 1.96$ (roughly 2), the p-value is below 0.05 and we reject $H_0$ at the 5% level.
+
+* **Kilometers:** $t$ = `r round(t1, 2)`, which is far beyond ±1.96, so the p-value is essentially 0 (1.53e-09). We reject the null hypothesis that mileage does not affect price.
+* **Intercept:** $t$ = `r round(t0, 2)`, which is also significant, however the null hypothesis that the price of a 0 km car is zero is not particularly relevant.
+
+**R² and the F-value**
+
+* **R² = `r round(s_a$r.squared, 3)`.** Kilometres alone explain about `r round(100*s_a$r.squared)`% of the price differences, so about `r round(100*(1-s_a$r.squared))`% is due to other factors.
+* **F = `r round(s_a$fstatistic[1], 2)`.** The F-test checks whether all slope coefficients are zero at once. Since the p-value is essentially 0 (1.529e-09), the model has significant explanatory power.
+
+---
+
+# (b) A confidence interval for the effect of kilometres
+
+## A 95% confidence interval
+
+$$\hat\beta_1 \pm t_{0.975,\,N-2} \times SE(\hat\beta_1)$$
+
+$t_{0.975,\,N-2}$ is the critical value from the Student-t distribution with $N-2$ degrees of freedom (close to 1.96 in large samples). The interval also equals the set of values of $\beta_1$ that a 5% test would not reject.
+
+## Code
+
+```{r b-ci}
+confint(m1, level = 0.95)
+ci <- confint(m1)[2, ]
+crit <- qt(0.975, df = df.residual(m1))
+```
+
+
+## Interpretation of output
+
+If we were to take repeated random samples and construct confidence intervals from them, 95% of those intervals would capture the true population parameter. For our specific sample, each extra 10,000 km lowers the expected price by between `r format(round(-ci[2]*10000), big.mark=",")` and `r format(round(-ci[1]*10000), big.mark=",")` euros.
+
+Notes:
+
+* Zero is far outside the interval, consistent with the large t-statistic found in Part a).
+* The critical value is `r round(crit, 3)` rather than 1.96 because the sample is small, as the t-distribution has fatter tails.
+* A dealer can say "10,000 extra km typically takes between 709 and 1,283 euros off the price."
