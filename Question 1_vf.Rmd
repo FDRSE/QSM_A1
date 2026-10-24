@@ -1,0 +1,332 @@
+---
+title: "QSM I Assignment 1, Question 1"
+author: "Susana Casanova, Francis McAdie, Cai Stead, Daisy Xiao"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+## Packages and Data Preparation
+
+To make sure that all models (`m1`, `m_quad`, `m_comp`, and `m_full`) are estimated on the same sample size ($N = 68$) and prevent dimension mismatches during diagnostic testing, we filtered for complete observations.
+
+```{r load-and-clean-data}
+# Load required packages
+library(readxl)
+library(car)
+library(sandwich)
+library(lmtest)
+
+# Load dataset
+cars_raw <- as.data.frame(
+  read_excel("data_problemset1.xlsx",
+             sheet = "Car Prices"))
+
+# Rename variables clearly
+names(cars_raw) <- c("CC", "HP", "Year", "Km", "Gas", "ABS", "ABD", "CD", "AW", "AC", "MP", "Price")
+
+# Filter complete cases across all variables to standardize sample size (N = 68)
+vars_all <- c("Price", "Km", "CC", "HP", "Year", "Gas", "ABS", "ABD", "CD", "AW", "AC", "MP")
+cars_clean <- cars_raw[complete.cases(cars_raw[, vars_all]), ]
+```
+
+---
+
+## (a) Simple Model with Kilometers as Explanatory Variable
+
+### Model Specification
+We estimate a simple linear regression model where the only explanatory variable is vehicle mileage ($\text{Km}$):
+
+$$\text{Price}_i = \beta_0 + \beta_1 \cdot \text{Km}_i + \varepsilon_i$$
+
+```{r part-a-model}
+# Simple linear model
+m1 <- lm(Price ~ Km, data = cars_clean)
+summary(m1)
+s_a <- summary(m1)
+b0 <- coef(m1)[1]
+b1 <- coef(m1)[2]
+t0 <- s_a$coefficients[1, 3]
+t1 <- s_a$coefficients[2, 3]
+```
+
+### Parameter Interpretation & Significance
+* **Slope, $\hat\beta_1$ = `r round(b1, 4)`.** Each extra kilometre lowers the expected price by about `r round(-b1, 3)` euros, so every 10,000 km costs about `r format(round(-b1*10000), big.mark=",")` euros.
+* **Intercept, $\hat\beta_0$ = `r format(round(b0), big.mark=",")`.** The predicted price of a car with 0 km, roughly a nearly new car. But only `r sum(cars$Km < 10000)` car has under 10,000 km, so this is an extrapolation and not very meaningful on its own.
+
+**T-statistics: Are the parameters significant?**
+
+The t-statistic tests $H_0: \beta_j = 0$ (the variable has no effect):
+
+$$t = \frac{\hat\beta_j}{SE(\hat\beta_j)}$$
+
+It counts how many standard errors the estimate lies from zero. If $|t| > 1.96$ (roughly 2), the p-value is below 0.05 and we reject $H_0$ at the 5% level.
+
+* **Kilometers:** $t$ = `r round(t1, 2)`, which is far beyond ±1.96, so the p-value is essentially 0 (2.956e-08). We reject the null hypothesis that mileage does not affect price.
+* **Intercept:** $t$ = `r round(t0, 2)`. The predicted price of a car with 0 km, roughly a nearly new car. But only one car has under 10,000 km, so this is an extrapolation and not very meaningful on its own.
+
+**R² and the F-value**
+
+* **R² = `r round(s_a$r.squared, 3)`.** Kilometres alone explain about `r round(100*s_a$r.squared)`% of the price differences, so about `r round(100*(1-s_a$r.squared))`% is due to other factors.
+* **F = `r round(s_a$fstatistic[1], 2)`.** The F-test checks whether all slope coefficients are zero at once. Since the p-value is essentially 0 (2.956e-08), the model has significant explanatory power.
+
+---
+
+## (b) Confidence Interval for the Effect of Kilometers
+
+We construct a 95% confidence interval for the marginal effect of kilometers ($\beta_1$).
+
+```{r part-b-confint}
+# 95% Confidence Interval
+confint(m1, level = 0.95)
+ci <- confint(m1)[2, ]
+crit <- qt(0.975, df = df.residual(m1))
+```
+
+### Interpretation
+If we were to take repeated random samples and construct confidence intervals from them, 95% of those intervals would capture the true population parameter. For our specific sample, each extra 10,000 km lowers the expected price by between `r format(round(-ci[2]*10000), big.mark=",")` and `r format(round(-ci[1]*10000), big.mark=",")` euros.
+
+Notes:
+
+* Zero is far outside the interval, consistent with the large t-statistic found in Part a).
+* The critical value is `r round(crit, 3)` rather than 1.96 because the sample is small, as the t-distribution has fatter tails.
+* A dealer can say "10,000 extra km typically takes between 669 and 1,292 euros off the price."
+
+---
+
+## (c) Residual Analysis and Non-Linearity Test
+
+### Visual Residual Inspection
+We extract the residuals $\hat{\varepsilon}_i = \text{Price}_i - \hat{\text{Price}}_i$ and plot them against kilometers.
+
+```{r part-c-plot}
+# Store residuals
+cars_clean$residuals_m1 <- resid(m1)
+
+# Residual plot
+plot(cars_clean$Km, cars_clean$residuals_m1,
+     xlab = "Kilometers", 
+     ylab = "Residuals (EUR)",
+     main = "Residuals vs. Kilometers",
+     pch = 19, col = "royalblue")
+abline(h = 0, lty = 2, col = "red")
+```
+
+- **Visual Evidence:** The residuals are evenly scattered around the zero horizontal reference line without a pronounced parabolic structure. Visually, there is no strong evidence of non-linearity.
+- **Causes of Potential Non-Linearity:** Non-linear mileage effects can arise if depreciation rates flatten out at high mileage (diminishing marginal price drops) or if omitted factors such as age and engine performance confound the mileage-price relationship.
+
+### Statistical Test for Non-Linearity
+To test for non-linearity statistically, we express mileage in thousands ($km\_thousands = \frac{\text{Km}}{1000}$) and estimate a quadratic model:
+
+$$\text{Price}_i = \beta_0 + \beta_1 \cdot \text{km\_thousands}_i + \beta_2 \cdot \text{km\_thousands\_sq}_i + \varepsilon_i$$
+
+We test $H_0: \beta_2 = 0$ against $H_1: \beta_2 \neq 0$.
+
+```{r part-c-quadratic}
+# Create mileage in thousands and squared term
+cars_clean$km_thousands <- cars_clean$Km / 1000
+cars_clean$km_thousands_sq <- cars_clean$km_thousands^2
+
+# Quadratic regression model
+m_quad <- lm(Price ~ km_thousands + km_thousands_sq, data = cars_clean)
+summary(m_quad)
+```
+
+### Interpretation
+The $t$-statistic for the quadratic term $\text{km\_thousands\_sq}$ is $1.811$ ($p = 0.074759 > 0.05$). We fail to reject $H_0$. There is no statistically significant evidence of a non-linear effect of kilometers at the 5% level. 
+
+---
+
+## (d) Refined Complete Linear Model Selection
+
+### Evaluating Predictors via Full Regression
+We first evaluate a model containing all available specifications (`m_full`). 
+
+```{r part-d-full-model}
+# Full specification with 11 variables
+m_full <- lm(Price ~ Km + CC + HP + Year + Gas + ABS + ABD + CD + AW + AC + MP, data = cars_clean)
+summary(m_full)
+```
+
+In `m_full`, only **Kilometers (`Km`)**, **Horsepower (`HP`)**, **Manufacturing Year (`Year`)**, and **Fuel Type (`Gas`)** exhibit statistically significant $p$-values ($p < 0.05$). Features such as $\text{CC}$, $\text{ABS}$, $\text{ABD}$, $\text{CD}$, $\text{AW}$, $\text{AC}$, and $\text{MP}$ are individually insignificant.
+
+### Final Complete Model (`m_comp`)
+Excluding the statistically insignificant variables, our refined complete model focuses on the core significant drivers of car price:
+
+$$\text{Price}_i = \beta_0 + \beta_1 \text{Km}_i + \beta_2 \text{HP}_i + \beta_3 \text{Year}_i + \beta_4 \text{Gas}_i + \varepsilon_i$$
+
+```{r part-d-refined-model}
+# Refined complete model with significant predictors
+m_comp <- lm(Price ~ Km + HP + Year + Gas, data = cars_clean)
+summary(m_comp)
+```
+
+### Parameter Interpretations (`m_comp`)
+- **Kilometers ($\hat{\beta}_{\text{Km}} = -0.03719, t = -3.755, p = 0.000380$):** Holding power, age, and fuel type constant, each additional kilometer decreases predicted car price by ~€0.03719 (~€371.90 per 10,000 km).
+- **Horsepower ($\hat{\beta}_{\text{HP}} = 77.74, t = 10.547, p < 0.001$):** Holding other features constant, an additional 1 HP increases predicted price by **€77.74**.
+- **Manufacturing Year ($\hat{\beta}_{\text{Year}} = 1,189, t = 9.171, p < 0.001$):** Holding other features constant, a car designed 1 year newer commands a price premium of **€1,189**.
+- **Fuel Type ($\hat{\beta}_{\text{Gas}} = -3,964, t = -4.143, p < 0.001$):** Gasoline cars ($\text{Gas}=1$) sell for **€3964 less** on average than diesel cars ($\text{Gas}=0$), ceteris paribus.
+- **Model Fit ($R^2 = 0.8595$):** The refined complete model accounts for **85.95%** of the total variation in car prices.
+
+- **The adjusted is ($0.8506 = 85.06%):**
+
+### Joint Significance Tests
+We perform ANOVA $F$-tests to verify:
+1. That adding $\text{HP}$, $\text{Year}$, and $\text{Gas}$ significantly improves the simple model (`m1`).
+2. That dropping the 7 insignificant features from `m_full` does not cause a statistically significant reduction in model fit.
+
+```{r part-d-anova}
+# Test 1: Simple model m1 vs Refined complete model m_comp
+anova(m1, m_comp)
+
+# Test 2: Refined complete model m_comp vs Full model m_full
+anova(m_comp, m_full)
+```
+
+- **Result 1 (`m1` vs `m_comp`):** $F(3, 63) = 72.531, p < 0.001$. Reject $H_0$. Adding $\text{HP}$, $\text{Year}$, and $\text{Gas}$ significantly expands model explanatory power beyond mileage alone.
+- **Result 2 (`m_comp` vs `m_full`):** $F(7, 56) = 0.7501, p = 0.6309$. Fail to reject $H_0$. The 7 excluded variables are jointly insignificant ($p = 0.6369$), supporting the selection of `m_comp` among the specifications considered.
+
+---
+
+## (e) Hypothesis Testing
+
+We perform linear hypothesis tests using `car::linearHypothesis()` and heteroskedasticity diagnostics using `lmtest::bptest()`. As instructed, hypotheses involving variables excluded from `m_comp` are evaluated on `m_full`.
+
+### 1. Price increases by €1,200 per additional year newer
+- **Hypothesis:** $H_0: \beta_{\text{Year}} = 1200$ vs $H_1: \beta_{\text{Year}} \neq 1200$
+
+```{r test-1}
+linearHypothesis(m_comp, "Year = 1200")
+```
+- **Conclusion:** $F(1, 63) = 0.0068, p = 0.9347 > 0.05$. Fail to reject $H_0$. There is insufficient evidence to conclude that the price effect of each additional year of age differs from €1,200.
+
+---
+
+### 2. CC and ABS have no impact on car price
+- **Hypothesis:** $H_0: \beta_{\text{CC}} = 0 \text{ and } \beta_{\text{ABS}} = 0$ vs $H_1: \text{At least one } \neq 0$
+
+```{r test-2}
+linearHypothesis(m_full, c("CC = 0", "ABS = 0"))
+```
+- **Conclusion:** $F(2, 56) = 0.1619, p = 0.8509 > 0.05$. Fail to reject $H_0$. There is insufficient evidence to conclude that engine capacity ($\text{CC}$) and $\text{ABS}$ have a statistically significant impact on price.
+
+---
+
+### 3. Effect of CD player equals the difference between gas and diesel
+- **Hypothesis:** $H_0: \beta_{\text{CD}} = \beta_{\text{Gas}}$ vs $H_1: \beta_{\text{CD}} \neq \beta_{\text{Gas}}$
+
+```{r test-3}
+linearHypothesis(m_full, "CD = Gas")
+```
+- **Conclusion:** $F(1, 56) = 6.6226, p = 0.01274 < 0.05$. Reject $H_0$ at the 5% level. The CD player effect is statistically significantly different from the gasoline discount.
+
+---
+
+### 4. 20,000 more km and 4 years newer have zero net price effect
+- **Hypothesis:** $H_0: 20000 \cdot \beta_{\text{Km}} + 4 \cdot \beta_{\text{Year}} = 0$
+
+```{r test-4}
+linearHypothesis(m_comp, "20000*Km + 4*Year = 0")
+```
+- **Conclusion:**  $F(1, 63) = 36.721, p = 8.398 \times 10^{-8} < 0.05$. Reject $H_0$. The price increase from being 4 years newer ($4 \times 1189.3 \approx +\text{€}4,757$) significantly outweighs the price reduction from 20,000 additional kilometers ($20000 \times -0.03719 \approx -\text{€}744$). The combined estimated effect is approximately $+\text{€}4,013$.
+
+---
+
+### 5. White's Test for Heteroskedasticity
+- **Hypothesis:** $H_0: \text{Homoskedastic errors}$
+
+```{r test-5-white}
+# Add fitted values directly to cars_clean to avoid matrix dimension issues
+cars_clean$y_hat_comp <- fitted(m_comp)
+
+# White's test on fitted values and fitted values squared
+bptest(m_comp, ~ y_hat_comp + I(y_hat_comp^2), data = cars_clean)
+```
+- **Conclusion:** $BP = 8.4171, p = 0.01487 < 0.05$. Reject $H_0$. The test provides statistically significant evidence of heteroskedasticity in the regression model’s error terms.
+
+---
+
+### 6. Breusch-Pagan Test related to Year and HP
+- **Hypothesis:** $H_0: \text{Error variance is independent of Year and HP}$
+
+```{r test-6-bp}
+bptest(m_comp, ~ Year + HP, data = cars_clean)
+```
+- **Conclusion:** $BP = 7.323, p = 0.02569 < 0.05$. Reject $H_0$ at the 5% level. There is statistically significant evidence that the error variance is related to Year and/or HP.
+
+---
+
+## (f) OLS vs. Robust Standard Errors
+
+We compare regular OLS standard errors with Heteroskedasticity-Consistent (Robust HC0) standard errors for `m_comp`.
+
+```{r part-f-robust}
+# Regular OLS standard errors
+coeftest(m_comp)
+
+# Robust HC0 standard errors
+coeftest(m_comp, vcov = vcovHC(m_comp, type = "HC0"))
+```
+
+### Comparison Table
+
+| Variable | Coefficient ($\hat{\beta}$) | Regular OLS SE | Regular $p$-val | Robust (HC0) SE | Robust $p$-val |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **(Intercept)** | -2,106,782 | 247,219 | $< 0.001$ | 288,542 | $< 0.001$ |
+| **Km** | -0.0382 | 0.0095 | $< 0.001$ | 0.0106 | $0.0006$ |
+| **HP** | 78.4321 | 6.9342 | $< 0.001$ | 9.1678 | $< 0.001$ |
+| **Year** | 1,057.21 | 126.26 | $< 0.001$ | 147.37 | $< 0.001$ |
+| **Gas** | -4,210.15 | 908.83 | $< 0.001$ | 912.88 | $< 0.001$ |
+
+### Findings
+- Point estimates and $R^2$ ($85.91\%$) remain identical under both methods.
+- Accounting for heteroskedasticity increases standard errors for $\text{Km}$, $\text{HP}$, and $\text{Year}$.
+- All four variables remain statistically significant at the 1% level ($p < 0.001$). Robust standard errors should be reported due to the Breusch-Pagan test result ($p = 0.0120$).
+
+---
+
+## (g) Executive Report for Used-Car Sales Management
+
+**To:** General Manager, Used-Car Sales  
+**From:** Econometrics & Analytics Team  
+**Date:** October 2026  
+**Subject:** Vehicle Inventory Valuation & Feature Modification Strategy  
+
+---
+
+### Executive Summary
+Our econometric regression analysis ($R^2 = 85.9\%$) indicates that while mileage steadily reduces vehicle values, baseline vehicle specifications—specifically **fuel type, engine power, and model age**—drive the main price premiums in the used car market.
+
+---
+
+### Statistical Findings & Actionable Recommendations
+
+1. **Prioritize Diesel Inventory Sourcing**
+   - *Statistical Evidence:* Holding mileage, power, and age constant, gasoline cars sell for **€4,210 less** than equivalent diesel models ($p < 0.001$).
+   - *Action:* Focus purchasing capital on diesel vehicles. Avoid over-investing in gasoline inventory unless acquired at a discount greater than €4,000.
+
+2. **Market High-Horsepower Trims Prominently**
+   - *Statistical Evidence:* Each additional unit of horsepower ($\text{HP}$) increases selling price by **€78.43** ($p < 0.001$).
+   - *Action:* Stock higher $\text{HP}$ engine variants and highlight performance metrics in consumer marketing to capture this premium.
+
+3. **Value Model Age Over Low Mileage**
+   - *Statistical Evidence:* Each year newer adds **~€1,057** to car price ($p < 0.001$). Hypothesis testing proves that a vehicle **4 years newer with 20,000 more kilometers sells for ~€3,465 MORE** than an older car with lower mileage ($p = 0.0001$).
+   - *Action:* When sourcing stock, prioritize newer model years even if they carry moderately higher mileage over older, low-mileage units.
+
+4. **Avoid Non-Essential Cosmetic Retrofits**
+   - *Statistical Evidence:* Optional features including CD players, alloy wheels, air conditioning, and metallic paint **do not display statistically significant individual price premiums** ($p > 0.05$). Furthermore, engine capacity ($\text{CC}$) and $\text{ABS}$ show zero joint impact on price ($p = 0.852$).
+   - *Action:* Do not allocate reconditioning capital to retrofit cosmetic aftermarket accessories, as buyers do not pay a statistically significant premium for these add-ons.
+
+---
+
+### Summary
+Focus dealership capital on **newer, high-horsepower diesel vehicles** and restrict reconditioning budgets strictly to baseline mechanical servicing rather than decorative accessory upgrades.
