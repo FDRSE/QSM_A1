@@ -1,0 +1,58 @@
+---
+output:
+  html_document: default
+---
+
+```{r setup, message = FALSE}
+data <- read.csv("C:/Users/caist/OneDrive/Documents/BSE/Quantitative and Statistical Methods/Datasets/data_problemset1 - Car Prices.csv")
+data$Age <- 2015 - data$Year
+```
+## Part F – Robust standard errors
+
+```{r part-f-packages, message = FALSE}
+library(sandwich)
+library(lmtest)
+```
+
+We re-estimate the multiple regression from Part D:
+
+```{r part-f-model}
+model3 <- lm(Car_Price ~ Kilometers + Age + Gas_1..Diesel_0 + HP, data = data)
+summary(model3)
+```
+
+We then recompute the standard errors using heteroskedasticity-robust (HC1) standard errors:
+
+```{r part-f-robust}
+rob.se <- vcovHC(model3, type = "HC1")
+coeftest(model3, rob.se)
+```
+
+### Comparing OLS and robust standard errors
+
+```{r part-f-se-comparison}
+se_comparison <- data.frame(
+  SE_OLS    = sqrt(diag(vcov(model3))),
+  SE_Robust = sqrt(diag(rob.se))
+)
+se_comparison$Ratio <- se_comparison$SE_Robust / se_comparison$SE_OLS
+
+knitr::kable(se_comparison, digits = 8,)
+```
+
+```{r part-f-p-comparison}
+p_comparison <- data.frame(
+  p_OLS    = summary(model3)$coefficients[, 4],
+  p_Robust = coeftest(model3, vcov = rob.se)[, 4]
+)
+
+knitr::kable(p_comparison, digits = 8)
+```
+
+### Interpretation
+
+Comparing the two, the robust standard errors are consistently larger than the OLS ones. This is indicative that there is heteroskedasticity in the data as the standard error has to increase to allow for the change in variance within the data, so the OLS SE understate the uncertainty of the estimates. 
+
+We notice how the km SE increased the most, suggesting that this is the variable with especially high heteroskedasticity in the errors. 
+
+Because larger SEs give smaller t-statistics, the robust p-values are higher. However, looking at the robust p-values, we can see that they still remain extremely small meaning we will reject the null hypothesis that the coefficients value is zero, with a significance of up to 1%.
