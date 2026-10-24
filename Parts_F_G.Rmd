@@ -1,0 +1,114 @@
+---
+title: "QSM I Assignment 1, Question 1"
+author: "Susana Casanova, Francis McAdie, Cai Stead, Daisy Xiao"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+## Packages and Data Preparation
+
+To make sure that all models (`m1`, `m_quad`, `m_comp`, and `m_full`) are estimated on the same sample size ($N = 68$) and prevent dimension mismatches during diagnostic testing, we filtered for complete observations.
+
+```{r load-and-clean-data}
+# Load required packages
+library(readxl)
+library(car)
+library(sandwich)
+library(lmtest)
+
+# Load dataset
+cars_raw <- as.data.frame(read_excel("data_problemset1.xls", sheet = "Car Prices"))
+
+# Rename variables clearly
+names(cars_raw) <- c("CC", "HP", "Year", "Km", "Gas", "ABS", "ABD", "CD", "AW", "AC", "MP", "Price")
+
+# Filter complete cases across all variables to standardize sample size (N = 68)
+vars_all <- c("Price", "Km", "CC", "HP", "Year", "Gas", "ABS", "ABD", "CD", "AW", "AC", "MP")
+cars_clean <- cars_raw[complete.cases(cars_raw[, vars_all]), ]
+```
+
+---
+```{r load model}
+m_comp <- lm(Price ~ Km + HP + Year + Gas, data = cars_clean)
+summary(m_comp)
+## (f) OLS vs. Robust Standard Errors
+```
+## (F) Comparing regular OLS SEs with Heteroskedasticity-consistent SEs for `m_comp`.
+
+
+
+```{r part-f-robust}
+
+# Regular OLS standard errors
+coeftest(m_comp)
+print(summary(m_comp), digits = 10)
+
+
+# Robust HC0 standard errors
+coeftest(m_comp, vcov = vcovHC(m_comp, type = "HC0"))
+
+ct <- coeftest(m_comp, vcov = vcovHC(m_comp, type = "HC0"))
+print(unclass(ct), digits = 10)
+```
+
+### Comparison Table
+
+| Variable | Coefficient ($\hat{\beta}$) | Regular OLS SE | Regular $p$-val | Robust (HC0) SE | Robust $p$-val | Difference in SE
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **(Intercept)** | -2,363,512.79 | 259,479.07 | $< 0.001$ | 281,424.56 | $< 0.001$ | 21,945.49 |
+| **Km** | -0.0372 | 0.0095 | $< 0.001$ | 0.0106 | $< 0.001$ |  0.0011 |
+| **HP** | 77.74 | 7.37 | $< 0.001$ | 9.43 | $< 0.001$ | 2.06 |
+| **Year** | 1,189.33 | 129.68 | $< 0.001$ | 140.67 | $< 0.001$ | 10.99 |
+| **Gas** | -3,964.36 | 956.82 | $< 0.001$ | 939.31 | $< 0.001$ | -17.51 |
+
+### Findings
+Coefficient estimates and $R^2$ ($85.91\%$) remain identical under both methods.
+Accounting for heteroskedasticity increases standard errors for $\text{Km}$, $\text{HP}$, and $\text{Year}$, showing how the SE of the variables can  vary for observation.
+
+Because larger SEs give smaller t-statistics, the robust p-values are higher. However, looking at the robust p-values, we can see that they still remain under 0.01, meaning we will reject the null hypothesis that the coefficients value is zero, with a significance of up to 1%.
+
+---
+
+## (g) Executive Report for Used-Car Sales Management
+
+**To:** General Manager, Used-Car Sales  
+**From:** Econometrics & Analytics Team  
+**Date:** October 2026  
+**Subject:** Vehicle Valuation & Future Market Strategy  
+
+---
+
+### Executive Summary
+Our econometric regression analysis ($R^2 = 85.9\%$) indicates that while mileage steadily reduces vehicle values, baseline vehicle specifications—specifically **fuel type, engine power, and model age**—drive the main price premiums in the used car market.
+
+---
+
+### Statistical Findings & Actionable Recommendations
+
+1. **Prioritize Diesel Inventory Sourcing**
+   - *Statistical Evidence:* Holding mileage, power, and age constant, we can be very confident gasoline cars sell for around **€4,210 less** than equivalent diesel models ($p < 0.001$).
+   - *Action:* Focus on buying diesel vehicles, but only in cases where they are **€4,210** less than their equivalent gasoline counterparts. Similarly, don't buy  gasoline cars that are valued at more **€4,210** less than their gasoline counterparts.
+
+2. **Market High-Horsepower Trims Prominently**
+   - *Statistical Evidence:* Each additional unit of horsepower increases selling price by **€78.43** ($p < 0.001$).
+   - *Action:* If cars have a higher HP, be sure to use this as a markup premium, as we have seen that customers consistently pay more for cars with higher horsepower.
+
+3. **Value Model Age Over Low Mileage**
+   - *Statistical Evidence:* Each year newer adds around **€1,057** to car price ($p < 0.001$). When comparing this to how the price decreases with kilometres driven we found that a vehicle  which is **4 years newer with 20,000 more kilometers sells for around €3,500 more** than an older car with lower mileage ($p = 0.0001$).
+   - *Action:* When sourcing stock, prioritize newer model years even if they carry moderately higher mileage over older, low kilometres units.
+
+4. **Avoid Non-Essential Cosmetic Features**
+   - *Statistical Evidence:* Optional features including CD players, alloy wheels, air conditioning, and metallic paint **do not display statistically significant individual price premiums** ($p > 0.05$). 
+   - *Action:* Do not allocate funding to retrofit cosmetic accessories, as buyers do not pay a statistically significant premium for these additions.
+
+---
