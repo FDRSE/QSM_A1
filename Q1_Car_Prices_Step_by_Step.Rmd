@@ -1,0 +1,573 @@
+---
+title: 'QSM I, Assignment 1, Question 1: what drives the price of a used BMW?'
+subtitle: 'Part by part: the statistics and the R code explained together'
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 7, fig.height = 4)
+```
+
+# How to use this file
+
+* Save this `.Rmd` in the **same folder** as `data_problemset1.xls`, open it in RStudio and click **Knit**. Or run it chunk by chunk with the green ▶ button and read the text as you go.
+* Each part (a) to (g) has the same layout:
+    1. **The question:** what's being asked.
+    2. **The method:** the statistics behind it, in plain words.
+    3. **The code:** with a line-by-line explanation of what each R command does.
+    4. **The result:** how to read the output and what to write.
+* Every number in the text is computed live from the data, so the text always matches the output.
+* Question 1 can be done in groups, but write the final answers in your own words.
+
+---
+
+# Step 0: Set up and load the data
+
+## Packages
+
+```{r packages}
+library(readxl)    # reads Excel files
+library(lmtest)    # coeftest(), bptest(), resettest()
+library(car)       # linearHypothesis(), vif()
+library(sandwich)  # vcovHC(): robust standard errors
+```
+
+**The code explained**
+
+* A **package** is a bundle of extra functions. `library()` loads one so its functions can be used in this session.
+* If R says `there is no package called ...`, run `install.packages("name")` once in the **Console** (not in this file).
+
+## Loading the data
+
+```{r load}
+cars <- as.data.frame(read_excel("C:/Users/Ding/OneDrive/Documents/BSE_Masters/Term_1/Q&S/data_problemset1.xls", sheet = "Car Prices"))
+names(cars) <- c("CC", "HP", "Year", "Km", "Gas", "ABS", "ABD",
+                 "CD", "AW", "AC", "MP", "Price")
+str(cars)
+summary(cars)
+colSums(is.na(cars))
+```
+
+**The code explained**
+
+* `read_excel(file, sheet = ...)` reads one worksheet. The file name has no folder path, so R looks in the same folder as this `.Rmd`.
+* `as.data.frame()` turns the result into a standard R table (a **data frame**): rows are cars, columns are variables.
+* `<-` is R's assignment arrow: "store the thing on the right under the name on the left". So `cars` is now our dataset.
+* `names(cars) <- c(...)` replaces the long Excel headers (e.g. `Gas_1/ Diesel_0`) with short names. `c()` **c**ombines values into a list (a **vector**). The 12 names must be in the same order as the 12 columns.
+* `str()` shows the **str**ucture: each column's type and first values. `summary()` gives min, quartiles, mean and max.
+* `is.na(cars)` marks every missing value as `TRUE`; `colSums()` counts them per column.
+
+**What to notice**
+
+* There are `r nrow(cars)` cars, with prices from `r format(min(cars$Price), big.mark=",")` to `r format(max(cars$Price), big.mark=",")` euros.
+* Most features are **dummy variables** (1 = has it, 0 = doesn't). A dummy's coefficient is the average price difference between cars with and without the feature, holding everything else in the model fixed.
+* `Gas` is 1 for petrol and 0 for diesel, so its coefficient means **petrol minus diesel**.
+* **`MP` (metal paint) has `r sum(is.na(cars$MP))` missing values.** R silently drops those cars from any regression that includes `MP`. This matters in part (d).
+* Only `r sum(cars$ABS == 0)` cars lack ABS. With so little variation, the ABS effect will be hard to estimate.
+
+---
+
+# (a) A simple model: price on kilometres
+
+## The question
+
+> Estimate a simple model where the only explanatory variable is kilometres. Interpret the parameter values and t-statistics, the R² and the F-value.
+
+## The method
+
+We fit a straight line by **ordinary least squares (OLS)**:
+
+$$Price_i = \beta_0 + \beta_1\,Km_i + \varepsilon_i$$
+
+* $\beta_0$ (the **intercept**) is the predicted price when Km = 0.
+* $\beta_1$ (the **slope**) is the change in expected price for one extra kilometre: the **marginal effect** of kilometres.
+* $\varepsilon_i$ (the **error**) is everything else that affects car $i$'s price.
+* OLS picks the $\hat\beta_0$ and $\hat\beta_1$ that make the **sum of squared residuals** as small as possible. A **residual** is the gap between a car's actual price and the line.
+
+> **Ecology parallel.** Like fitting a line of tree height against altitude: the slope is how many metres of height you lose per extra 100 m up, and the residuals are each tree's distance from the line.
+
+## The code
+
+```{r a-model}
+m_a <- lm(Price ~ Km, data = cars)
+summary(m_a)
+```
+
+```{r a-store, include=FALSE}
+s_a <- summary(m_a)
+b0 <- coef(m_a)[1]; b1 <- coef(m_a)[2]
+t0 <- s_a$coefficients[1, 3]; t1 <- s_a$coefficients[2, 3]
+```
+
+**The code explained**
+
+* `lm()` = **l**inear **m**odel, R's OLS function.
+* `Price ~ Km` is a **formula**: read `~` as "is explained by". The dependent variable goes on the left, explanatory variables on the right. R adds the intercept automatically.
+* `data = cars` tells R which data frame the names refer to.
+* `m_a <-` stores the fitted model so we can reuse it.
+* `summary(m_a)` prints the results table. Its columns are: `Estimate` ($\hat\beta$), `Std. Error` (its standard error), `t value` (Estimate ÷ Std. Error) and `Pr(>|t|)` (the p-value).
+
+## The result
+
+**Parameter values**
+
+* **Slope, $\hat\beta_1$ = `r round(b1, 4)`.** Each extra kilometre lowers the expected price by about `r round(-b1, 3)` euros, so **every 10,000 km costs about `r format(round(-b1*10000), big.mark=",")` euros**.
+* **Intercept, $\hat\beta_0$ = `r format(round(b0), big.mark=",")`.** The predicted price of a car with 0 km, roughly a nearly new car. But only `r sum(cars$Km < 10000)` cars have under 10,000 km, so this is an extrapolation and not very meaningful on its own. Its job is to position the line.
+
+**t-statistics: are the parameters significant?**
+
+The t-statistic tests $H_0: \beta_j = 0$ (the variable has no effect):
+
+$$t = \frac{\hat\beta_j}{SE(\hat\beta_j)}$$
+
+It counts how many standard errors the estimate lies from zero. If $|t| > 1.96$ (roughly 2), the p-value is below 0.05 and we reject $H_0$ at the 5% level.
+
+* **Kilometres:** $t$ = `r round(t1, 2)`, far beyond ±1.96, so the p-value is essentially 0. We **reject** $H_0$: mileage clearly affects price.
+* **Intercept:** $t$ = `r round(t0, 2)`. Also significant, but "the price of a 0 km car is zero" isn't an interesting hypothesis.
+
+**R² and the F-value**
+
+* **R² = `r round(s_a$r.squared, 3)`.** R² is the share of the variation in price that the model explains: $R^2 = 1 - RSS/TSS$, where RSS is the sum of squared residuals and TSS the total variation of price around its mean. Kilometres alone explain about `r round(100*s_a$r.squared)`% of the price differences, so about `r round(100*(1-s_a$r.squared))`% is due to other things (age, power, fuel type…).
+* **F = `r round(s_a$fstatistic[1], 2)`.** The F-test checks whether **all** slope coefficients are zero at once, i.e. whether the model explains anything at all. With only one explanatory variable, it's the same test as the t-test: F = t² = `r round(t1, 2)`² = `r round(t1^2, 2)`. The p-value is essentially 0, so the model has significant explanatory power.
+
+---
+
+# (b) A confidence interval for the effect of kilometres
+
+## The question
+
+> Construct and interpret a confidence interval for the marginal effect of kilometres.
+
+## The method
+
+A 95% **confidence interval** is a range built so that, in 95% of samples, it would contain the true $\beta_1$:
+
+$$\hat\beta_1 \pm t_{0.975,\,N-2} \times SE(\hat\beta_1)$$
+
+$t_{0.975,\,N-2}$ is the critical value from the Student-t distribution with $N-2$ degrees of freedom (close to 1.96 in large samples). The interval also equals the set of values of $\beta_1$ that a 5% test would **not** reject.
+
+## The code
+
+```{r b-ci}
+confint(m_a, level = 0.95)
+
+# The same thing by hand:
+se1  <- s_a$coefficients[2, 2]
+crit <- qt(0.975, df = m_a$df.residual)
+c(lower = b1 - crit * se1, upper = b1 + crit * se1)
+```
+
+```{r b-store, include=FALSE}
+ci <- confint(m_a)[2, ]
+```
+
+**The code explained**
+
+* `confint(model, level = 0.95)` gives the 95% interval for every coefficient.
+* `s_a$coefficients[2, 2]`: `$` pulls one element out of an object; `[2, 2]` means row 2 (Km), column 2 (Std. Error).
+* `qt(0.975, df = ...)` gives the t critical value that leaves 2.5% in each tail. `m_a$df.residual` is the degrees of freedom, $N - 2$.
+* The last line computes the interval by hand to show it matches `confint()`. Naming the elements (`lower =`, `upper =`) labels the output.
+
+## The result
+
+With 95% confidence, **each extra 10,000 km lowers the expected price by between `r format(round(-ci[2]*10000), big.mark=",")` and `r format(round(-ci[1]*10000), big.mark=",")` euros**.
+
+* Zero is far outside the interval, consistent with the large t-statistic in (a).
+* The critical value is `r round(crit, 3)` rather than 1.96 because the sample is small; the t distribution has fatter tails.
+* **Use:** a dealer can say "10,000 extra km typically knocks off between X and Y euros", which is more honest than a single number.
+
+---
+
+# (c) Residuals against kilometres: is the effect nonlinear?
+
+## The question
+
+> Graph the residuals against kilometres. Do you see any evidence of a nonlinear effect? Explain what could cause it. Test whether the effect is nonlinear and interpret the test. How would you modify the model?
+
+## The method
+
+If the straight line is right, the residuals should scatter randomly around zero at every mileage. A **pattern** (e.g. a U shape) means the line systematically misses: it's too high in some ranges and too low in others.
+
+## The code: the plot
+
+```{r c-plot}
+cars$res_a <- resid(m_a)
+plot(cars$Km, cars$res_a, pch = 19, col = "steelblue",
+     xlab = "Kilometres", ylab = "Residual (euros)",
+     main = "Residuals of Price ~ Km")
+abline(h = 0, lty = 2)
+lines(lowess(cars$Km, cars$res_a), col = "darkorange", lwd = 2)
+```
+
+**The code explained**
+
+* `resid(m_a)` extracts the residuals. `cars$res_a <-` stores them as a new column in `cars`.
+* `plot(x, y, ...)` draws a scatterplot. `pch = 19` makes solid dots, `col` sets the colour, `xlab`/`ylab`/`main` set the axis labels and title.
+* `abline(h = 0, lty = 2)` adds a **h**orizontal line at zero; `lty = 2` makes it dashed.
+* `lowess()` computes a smooth curve through the points (a moving local average); `lines()` draws it; `lwd = 2` makes it thicker. It makes any pattern easier to see.
+
+## The result: what the plot shows
+
+The orange curve shows a **mild U shape**: low-mileage and very high-mileage cars sit above zero (the line under-predicts them), and mid-mileage cars sit below. That suggests prices fall quickly over the first kilometres and then flatten out.
+
+## What could cause it?
+
+1. **A genuine depreciation curve.** Cars lose value fast at first, then level off towards a floor. The true relationship would be curved (convex).
+2. **An omitted variable.** Kilometres is strongly linked to **age**: the correlation between Km and Year is `r round(cor(cars$Km, cars$Year), 2)`. The residuals from (a) correlate with Year at `r round(cor(cars$res_a, cars$Year), 2)`, so a big part of what the model is missing is age. A missing variable that's correlated with an included one can create an apparent curve.
+
+> **Ecology parallel.** If you model bird counts on distance from a road only, the residuals may curve because distance is correlated with habitat type. The "curve" is really the missing habitat variable.
+
+## The code: testing it
+
+We use two tests:
+
+* **Ramsey's RESET test** adds powers of the fitted values ($\hat y^2$, $\hat y^3$) to the model and F-tests whether they help. $H_0$: the linear model is adequate.
+* **A quadratic term.** In $Price = \beta_0 + \beta_1 Km + \beta_2 Km^2 + \varepsilon$, the t-test of $H_0: \beta_2 = 0$ directly tests whether the effect of Km is linear.
+
+```{r c-tests}
+resettest(m_a, power = 2:3, type = "fitted")
+m_c <- lm(Price ~ Km + I(Km^2), data = cars)
+summary(m_c)
+```
+
+```{r c-store, include=FALSE}
+rs <- resettest(m_a, power = 2:3, type = "fitted")
+pq <- summary(m_c)$coefficients[3, 4]
+```
+
+**The code explained**
+
+* `resettest(model, power = 2:3, type = "fitted")` runs RESET with the squared and cubed fitted values. `2:3` means "2 to 3".
+* `I(Km^2)`: inside a formula, `^` has a special meaning, so `I()` ("as is") tells R to treat it as ordinary arithmetic: Km squared.
+
+## The result: interpreting the tests
+
+* RESET p-value = `r round(rs$p.value, 3)`; p-value of the $Km^2$ term = `r round(pq, 3)`.
+* At the 5% level **neither test rejects linearity**. The quadratic term is only significant at the 10% level, so the evidence for a curve is **weak**.
+* The positive sign on $Km^2$ fits the "fast then slow" depreciation story, but with `r nrow(cars)` cars we can't be confident.
+* Not rejecting doesn't prove the effect is linear. It means the data can't clearly show it isn't.
+
+**How to modify the model if you wanted to capture the curve:**
+
+* **Add $Km^2$:** the marginal effect becomes $\beta_1 + 2\beta_2 Km$, so it depends on how far the car has already gone.
+* **Use log(Price):** each extra km then lowers the price by a constant **percentage**, which automatically gives a bigger euro drop for expensive (low-mileage) cars.
+* **Add Year:** if the curve mostly comes from the missing age effect, controlling for age may remove it. Part (d) does this.
+
+*From here on, the question says to use a simple linear model with no nonlinear terms.*
+
+---
+
+# (d) A more complete model
+
+## The question
+
+> Select a more complete model with other relevant variables. Interpret the parameters and t-stats of your final model. Test whether the additional variables have significant joint explanatory power.
+
+## The method
+
+In **multiple regression**, each coefficient is the effect of that variable **holding all the others fixed** (*ceteris paribus*). This also fixes **omitted variable bias**: in (a), Km was picking up part of the age effect, because older cars tend to have more km.
+
+**Strategy:** start with all candidate variables, see which matter, then simplify to a smaller final model, and check with a joint test that the dropped variables really add nothing.
+
+## The code: step 1, start broad
+
+```{r d-full}
+m_full <- lm(Price ~ Km + CC + HP + Year + Gas + ABS + ABD + CD + AW + AC + MP, data = cars)
+summary(m_full)
+nobs(m_full)
+vif(m_full)
+```
+
+**The code explained**
+
+* `+` in the formula adds more explanatory variables.
+* `nobs()` = number of observations used. It's `r nobs(m_full)`, not `r nrow(cars)`, because the cars with missing `MP` were dropped.
+* `vif()` = **variance inflation factor**. It measures how much each coefficient's variance is inflated because that variable is correlated with the others (**collinearity**). Values above about 10 are usually a concern.
+
+**What it shows**
+
+* Km, HP, Year and Gas are strongly significant. CC and the equipment dummies (ABS, ABD, CD, AW, AC, MP) are not.
+* **CC and HP** are highly correlated (`r round(cor(cars$CC, cars$HP), 2)`): bigger engines are more powerful. That makes it hard to separate their effects. HP carries the effect, and CC adds nothing once HP is in.
+* **Km's effect shrinks** from `r round(b1, 4)` in (a) to `r round(coef(m_full)["Km"], 4)`. That's the omitted variable bias in (a): with Year left out, Km was also absorbing the effect of age.
+
+## The code: step 2, the final model
+
+```{r d-final}
+m_d <- lm(Price ~ Km + HP + Year + Gas, data = cars)
+summary(m_d)
+```
+
+```{r d-store, include=FALSE}
+cf <- coef(m_d); sd <- summary(m_d); td <- sd$coefficients[, 3]
+```
+
+**The code explained:** the same `lm()` call, keeping only the four variables with clear economic and statistical support. `coef()` extracts the estimates (used for the numbers in the text).
+
+## The result: interpreting the final model
+
+Each effect holds the other three variables constant:
+
+| Variable | Estimate | t-stat | Meaning |
+|---|---|---|---|
+| Km | `r round(cf["Km"], 4)` | `r round(td["Km"], 1)` | each extra 10,000 km lowers the price by about `r format(round(-cf["Km"]*1e4), big.mark=",")` € |
+| HP | `r round(cf["HP"], 1)` | `r round(td["HP"], 1)` | each extra horsepower adds about `r round(cf["HP"])` €; 50 HP more is about `r format(round(cf["HP"]*50), big.mark=",")` € |
+| Year | `r round(cf["Year"], 1)` | `r round(td["Year"], 1)` | each year newer adds about `r format(round(cf["Year"]), big.mark=",")` € |
+| Gas | `r round(cf["Gas"], 1)` | `r round(td["Gas"], 1)` | a petrol car sells for about `r format(round(-cf["Gas"]), big.mark=",")` € **less** than an otherwise identical diesel |
+
+* All four t-statistics are well beyond ±1.96: each variable is highly significant.
+* **R² = `r round(sd$r.squared, 3)`** (adjusted R² `r round(sd$adj.r.squared, 3)`), compared with `r round(s_a$r.squared, 3)` with kilometres alone. **Adjusted R²** penalises extra variables, so it only rises if a new variable adds enough to justify itself.
+* The intercept is large and negative because it's the predicted price in "year 0". It has no meaning on its own; it just positions the fitted plane.
+* The diesel premium makes sense: diesels are cheaper to run for drivers who do many kilometres.
+
+## The code: step 3, joint tests
+
+**Test 1: do the new variables add to the simple model?** $H_0: \beta_{HP} = \beta_{Year} = \beta_{Gas} = 0$. This is a **joint F-test** comparing the restricted model (a) with the unrestricted model (d):
+
+$$F = \frac{(RSS_R - RSS_U)/r}{RSS_U/(N-k-1)}$$
+
+where $r$ is the number of restrictions (3) and $k$ the number of regressors in the bigger model. If adding the variables cuts the RSS a lot, F is large and we reject.
+
+```{r d-test1}
+anova(m_a, m_d)
+linearHypothesis(m_d, c("HP = 0", "Year = 0", "Gas = 0"))
+```
+
+**The code explained**
+
+* `anova(small, big)` compares two **nested** models (the small one is the big one with some coefficients set to zero) using the RSS formula above.
+* `linearHypothesis(model, c(...))` tests restrictions written as text. Here it gives the same F, computed from the big model only.
+
+**Result:** F is enormous and p ≈ 0, so we **reject**: the added variables have strong joint explanatory power.
+
+**Test 2: are the dropped variables jointly irrelevant?** This justifies simplifying from the full model. The two models must be estimated on **the same cars**, so we first drop the cars with missing `MP`.
+
+```{r d-test2}
+cars_cc <- na.omit(cars[, c("Price","Km","CC","HP","Year","Gas","ABS","ABD","CD","AW","AC","MP")])
+m_r <- lm(Price ~ Km + HP + Year + Gas, data = cars_cc)
+m_u <- lm(Price ~ Km + CC + HP + Year + Gas + ABS + ABD + CD + AW + AC + MP, data = cars_cc)
+anova(m_r, m_u)
+```
+
+```{r d-store2, include=FALSE}
+av <- anova(m_r, m_u)
+```
+
+**The code explained**
+
+* `cars[, c(...)]` selects these columns (the blank before the comma means "all rows").
+* `na.omit()` removes every row with a missing value, leaving `r nrow(cars_cc)` complete cars.
+* Both models are then fitted on `cars_cc`, so the comparison is fair.
+
+**Result:** F = `r round(av$F[2], 2)`, p = `r round(av[2, "Pr(>F)"], 3)`. We **don't reject** that the seven dropped variables are jointly zero, so dropping them loses no significant explanatory power. Testing them jointly matters: seven separate t-tests don't answer the joint question.
+
+---
+
+# (e) Hypothesis tests
+
+## The method for e1 to e4
+
+Each of these is a test of a **linear restriction** on the coefficients, written $H_0: R\beta = q$. `linearHypothesis()` takes the restriction as text, builds $R$ and $q$, and computes a **Wald test**: it checks how far $R\hat\beta$ is from $q$, measured in units of its standard error. It reports the result as an F-statistic with a p-value. A small p-value (< 0.05) means reject.
+
+Some hypotheses involve variables not in the final model, so we add them first.
+
+## e1. The price falls by 1,200 € per extra year of age
+
+**Setting up $H_0$:** "one year older is 1,200 € cheaper" means "one year newer is 1,200 € dearer". Year counts the design year, so a higher Year means newer: $H_0: \beta_{Year} = 1200$.
+
+```{r e1}
+linearHypothesis(m_d, "Year = 1200")
+```
+
+```{r e1s, include=FALSE}
+e1 <- linearHypothesis(m_d, "Year = 1200")
+```
+
+**Result:** $\hat\beta_{Year}$ = `r round(cf["Year"])`, very close to 1,200. p = `r round(e1[2, "Pr(>F)"], 3)`, so we **don't reject**: the data are consistent with a 1,200 € drop per year of age.
+
+## e2. CC and ABS have no impact on the price
+
+$H_0: \beta_{CC} = 0$ **and** $\beta_{ABS} = 0$ (two restrictions, tested jointly). Neither is in the final model, so we add them.
+
+```{r e2}
+m_e2 <- lm(Price ~ Km + HP + Year + Gas + CC + ABS, data = cars)
+linearHypothesis(m_e2, c("CC = 0", "ABS = 0"))
+```
+
+```{r e2s, include=FALSE}
+e2 <- linearHypothesis(m_e2, c("CC = 0", "ABS = 0"))
+```
+
+**The code explained:** passing two restrictions inside `c()` tests them **jointly**.
+
+**Result:** p = `r round(e2[2, "Pr(>F)"], 3)`, so we **don't reject**. Once HP is in the model, engine size adds nothing, and with only `r sum(cars$ABS == 0)` cars lacking ABS, its effect can barely be measured.
+
+## e3. A CD player is worth the same as the petrol–diesel difference
+
+`Gas` is coded 1 = petrol, so $\beta_{Gas}$ **is** the petrol–diesel difference. $H_0: \beta_{CD} = \beta_{Gas}$, i.e. $\beta_{CD} - \beta_{Gas} = 0$. This test also uses the **covariance** between the two estimates, which `linearHypothesis()` handles automatically.
+
+```{r e3}
+m_e3 <- lm(Price ~ Km + HP + Year + Gas + CD, data = cars)
+linearHypothesis(m_e3, "CD = Gas")
+```
+
+```{r e3s, include=FALSE}
+e3 <- linearHypothesis(m_e3, "CD = Gas"); cf3 <- coef(m_e3)
+```
+
+**Result:** $\hat\beta_{CD}$ = `r round(cf3["CD"])` and $\hat\beta_{Gas}$ = `r round(cf3["Gas"])`. p = `r signif(e3[2, "Pr(>F)"], 2)`, so we **reject**. A CD player's small effect is clearly not the same as the large diesel premium.
+
+## e4. 20,000 more km but 4 years newer: the same price?
+
+The difference in price between the two cars is $20000\,\beta_{Km} + 4\,\beta_{Year}$. "Same price" means $H_0: 20000\,\beta_{Km} + 4\,\beta_{Year} = 0$.
+
+```{r e4}
+linearHypothesis(m_d, "20000*Km + 4*Year = 0")
+```
+
+```{r e4s, include=FALSE}
+e4 <- linearHypothesis(m_d, "20000*Km + 4*Year = 0")
+net <- 20000*cf["Km"] + 4*cf["Year"]
+```
+
+**The code explained:** you can write any linear combination of coefficients as text, using the variable names and `*`.
+
+**Result:** estimated net effect = `r format(round(20000*cf["Km"]), big.mark=",")` € (extra km) + `r format(round(4*cf["Year"]), big.mark=",")` € (newer design) = **`r format(round(net), big.mark=",")` €**. p ≈ `r signif(e4[2, "Pr(>F)"], 2)`, so we **reject**: four years newer is worth much more than 20,000 km of extra wear, so the newer car sells for clearly more.
+
+## The method for e5 and e6: heteroskedasticity
+
+OLS assumes the errors have the **same variance** for every car (**homoskedasticity**). If the spread differs across cars (**heteroskedasticity**), the coefficients are still fine but the usual standard errors, and so the t-tests, are wrong.
+
+Both tests below work the same way: square the residuals (a rough measure of each car's error variance), regress them on some variables, and check whether those variables explain the squared residuals. If they do, the variance isn't constant.
+
+> **Ecology parallel.** Biomass measurements in big rivers vary much more than in small streams. The spread of the errors grows with river size, which is heteroskedasticity.
+
+## e5. No heteroskedasticity: White's test
+
+**White's test** regresses the squared residuals on all the regressors, their squares and their cross-products. Under $H_0$ (homoskedasticity), $N \times R^2_{aux}$ follows a $\chi^2$ distribution with as many degrees of freedom as there are variables in that auxiliary regression. Squares of dummies are left out because $Gas^2 = Gas$.
+
+```{r e5}
+bptest(m_d, ~ Km + HP + Year + Gas + I(Km^2) + I(HP^2) + I(Year^2) +
+         Km:HP + Km:Year + Km:Gas + HP:Year + HP:Gas + Year:Gas, data = cars)
+
+# By hand, to see the mechanics:
+aux  <- lm(I(resid(m_d)^2) ~ Km + HP + Year + Gas + I(Km^2) + I(HP^2) + I(Year^2) +
+             Km:HP + Km:Year + Km:Gas + HP:Year + HP:Gas + Year:Gas, data = cars)
+NxR2 <- nobs(m_d) * summary(aux)$r.squared
+c(NxR2 = NxR2, p = pchisq(NxR2, df = 13, lower.tail = FALSE))
+```
+
+```{r e5s, include=FALSE}
+w <- bptest(m_d, ~ Km + HP + Year + Gas + I(Km^2) + I(HP^2) + I(Year^2) +
+              Km:HP + Km:Year + Km:Gas + HP:Year + HP:Gas + Year:Gas, data = cars)
+```
+
+**The code explained**
+
+* `bptest(model, ~ variables)` regresses the squared residuals on the variables after `~` and returns $N \times R^2$ with its p-value. Listing all the regressors, squares and cross-products makes it White's test.
+* `Km:HP` is the **cross-product** (Km × HP).
+* The "by hand" version does the same thing step by step: `aux` is the auxiliary regression, `summary(aux)$r.squared` its R², and `pchisq(..., lower.tail = FALSE)` gives the probability of a χ² value at least this large (the p-value). `df = 13` because there are 13 variables in the auxiliary regression.
+
+**Result:** p = `r signif(w$p.value, 2)`, well below 0.05, so we **reject homoskedasticity**. The error variance differs across cars.
+
+## e6. Heteroskedasticity related to YEAR or HP: Breusch–Pagan test
+
+The **Breusch–Pagan (BP) test** lets you choose **which** variables might drive the variance. Here they're Year and HP, so the test has 2 degrees of freedom.
+
+```{r e6}
+bptest(m_d, ~ Year + HP, data = cars, studentize = FALSE)  # original BP (as Stata's estat hettest)
+bptest(m_d, ~ Year + HP, data = cars)                      # robust (Koenker) version
+```
+
+```{r e6s, include=FALSE}
+bp1 <- bptest(m_d, ~ Year + HP, data = cars, studentize = FALSE)
+bp2 <- bptest(m_d, ~ Year + HP, data = cars)
+```
+
+**The code explained**
+
+* `~ Year + HP` restricts the auxiliary regression to these two variables.
+* `studentize = FALSE` gives the original Breusch–Pagan version, which assumes normal errors. The default (`TRUE`) gives Koenker's version, which doesn't need that assumption.
+
+**Result:** p = `r signif(bp1$p.value, 2)` (original) and `r signif(bp2$p.value, 2)` (Koenker). Both are below 0.05, so we **reject**: the error variance is related to Year and/or HP. Because BP targets specific variables, a rejection tells you **where** the heteroskedasticity comes from, which White's test doesn't.
+
+---
+
+# (f) Robust vs ordinary standard errors
+
+## The question
+
+> Estimate the model with and without robust standard errors. Do the robust errors, and so the conclusions on significance, differ much from the regular OLS ones?
+
+## The method
+
+The usual OLS standard errors assume homoskedasticity, which (e5) and (e6) rejected. **Heteroskedasticity-robust** (White, or "sandwich") standard errors are valid whether or not the errors are heteroskedastic. The **coefficients stay exactly the same**; only the standard errors, t-statistics and p-values change.
+
+## The code
+
+```{r f}
+coeftest(m_d)                                      # ordinary OLS standard errors
+coeftest(m_d, vcov = vcovHC(m_d, type = "HC1"))    # robust, same as Stata's ", robust"
+
+se_tab <- cbind(OLS = sqrt(diag(vcov(m_d))),
+                HC1 = sqrt(diag(vcovHC(m_d, type = "HC1"))))
+round(se_tab, 3)
+round(se_tab[, "HC1"] / se_tab[, "OLS"], 2)        # ratio: robust / ordinary
+```
+
+**The code explained**
+
+* `coeftest(model)` prints the coefficient table. With `vcov = ...` it uses whatever variance matrix you give it.
+* `vcovHC(model, type = "HC1")` computes the robust variance matrix. **HC1** includes a small-sample correction and matches Stata's `, robust`.
+* `vcov(m_d)` is the ordinary variance matrix. Its diagonal (`diag()`) holds each coefficient's variance, and `sqrt()` turns variances into standard errors.
+* `cbind()` puts the two columns side by side; `round(..., 3)` rounds to 3 decimals.
+
+## The result
+
+* The robust standard errors are somewhat larger for some variables (for HP by about `r round(100*(se_tab["HP","HC1"]/se_tab["HP","OLS"]-1))`%), consistent with the heteroskedasticity found in (e).
+* **The conclusions don't change:** every variable stays highly significant.
+* Because robust standard errors are valid either way, it's good practice to report them.
+
+---
+
+# (g) A short report for your boss
+
+## The question
+
+> Write a short report (max half a page) for your boss on which features, other than kilometres, could be modified or added to the cars to increase their selling price. Use the statistical evidence, but in terms your boss can understand and act on.
+
+## The method
+
+Translate the coefficients into euros, separate what the company **can change** from what it **can't**, and be honest about uncertainty: "no significant effect" means "no reliable evidence", not "proven zero".
+
+```{r g, include=FALSE}
+m_g <- lm(Price ~ Km + HP + Year + Gas + AC + ABD + CD + AW + MP, data = cars)
+cg  <- summary(m_g)$coefficients
+```
+
+```{r g-show}
+m_g <- lm(Price ~ Km + HP + Year + Gas + AC + ABD + CD + AW + MP, data = cars)
+round(summary(m_g)$coefficients[c("AC","ABD","CD","AW","MP"), ], 3)
+```
+
+**The code explained:** this adds the extras a dealer could fit, then shows just their rows of the coefficient table. `[c("AC", ...), ]` selects rows by name and keeps all columns.
+
+## Draft report (rewrite it in your own words)
+
+> **What makes our used BMWs sell for more (other than mileage)?**
+>
+> I analysed `r nrow(cars)` BMW sales. Mileage, age, engine power and fuel type together explain about `r round(100*sd$r.squared)`% of the differences in selling prices.
+>
+> * **Newer cars sell for more:** about `r format(round(cf["Year"]), big.mark=",")` € per year newer. We can't change a car's age, but we can favour newer stock when buying.
+> * **Engine power pays:** about `r round(cf["HP"])` € per extra horsepower, so a version with 50 HP more sells for roughly `r format(round(cf["HP"]*50), big.mark=",")` € more.
+> * **Diesels sell for more:** about `r format(round(-cf["Gas"]), big.mark=",")` € more than comparable petrol cars.
+> * **Extras we could fit ourselves** (CD player, alloy wheels, metallic paint, air conditioning, airbags) **show no reliable effect on price** in our data. Fitting them is unlikely to pay for itself.
+>
+> *Caveat: the sample is small, so modest effects of individual extras can't be ruled out; they just aren't large or consistent enough to show up.*
+
+Check the table above before submitting: if any extra has a p-value below 0.05 when you knit, change that bullet.
