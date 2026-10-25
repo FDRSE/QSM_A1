@@ -314,18 +314,20 @@ Our econometric regression analysis ($R^2 = 85.95\%$) indicates that while milea
 ### Statistical Findings & Actionable Recommendations
 
 1. **Prioritize Diesel Inventory Sourcing**
-   - *Statistical Evidence:* Holding mileage, power, and age constant, we can be confident gasoline cars sell for around **€3,964 less** than equivalent diesel models ($p-value < 0.001$).
+   - *Statistical Evidence:* Holding mileage, power, and age constant, we can be confident gasoline cars sell for around **€4,000 less** (best estimate €3,964) than equivalent diesel models ($p-value < 0.001$, we are extremely confident that the choice between gasoline and diesel has an effect on the car price).
    - *Action:* When buying stock, a diesel is the better purchase as long as it costs us less than about **€4,000** more than an equivalent petrol car, because we can expect to recover that premium when we sell.
    
 2. **Market High-Horsepower Trims Prominently**
-   - *Statistical Evidence:* Each additional unit of horsepower increases selling price by **€77.74** ($p-value < 0.001$).
+   - *Statistical Evidence:* Each additional unit of horsepower increases selling price by around €80 (best estimate **€77.74**) ($p-value < 0.001$).
    - *Action:* If cars have a higher HP, be sure to use this as a markup premium, as customers consistently pay more for cars with higher horsepower.
 
 3. **Value Model Age Over Low Mileage**
-   - *Statistical Evidence:* Each year newer adds around **€1,189** to car price ($p-value < 0.001$), while each 1000 km takes off around **€37**. This means that one extra design year is therefore worth roughly as much as 32,000 fewer kilometers. 
+   - *Statistical Evidence:* Each year newer adds around **€1,200** (best estimate €1,189) to car price ($p-value < 0.001$), while each 1000 km takes off around **€37** (best estimate €37.19). This means that one extra design year is therefore worth roughly as much as 32,000 fewer kilometers. 
    
-   - *Action:* When sourcing stock, prioritize newer model years even if they carry moderately higher mileage over older, low mileage units. When pricing, keep in mind buyers pay mainly for design year.
+   - *Action:* When sourcing stock, prioritise newer model years even if they carry moderately higher mileage over older, low mileage units. When pricing, keep in mind buyers pay mainly for design year.
 
 4. **Avoid Paying for Non-Essential Additional Features**
-   - *Statistical Evidence:* Optional features including CD players, alloy wheels, air conditioning, ABS, air bags and metallic paint, together with CC **do not display statistically significant price premiums** ($p-value > 0.05$), either individually or when combined. 
+   - *Statistical Evidence:* Optional features including CD players, alloy wheels, air conditioning, ABS, air bags and metallic paint, together with CC **do not display statistically significant price premiums** ($p value-> 0.05$), either individually or when combined. 
    - *Action:* Do not allocate funding to retrofit accessories, as buyers do not pay a statistically significant premium for these additions.
+
+In short, none of the optional features we could add to cars in stock (CD player, A/C, alloy wheels, etc.) reliably raise the price. What matters is fuel type, power and age, which are fixed when we buy the car.
