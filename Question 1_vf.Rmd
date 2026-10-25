@@ -61,8 +61,8 @@ t1 <- s_a$coefficients[2, 3]
 ```
 
 ### Parameter Interpretation & Significance
-* **Slope, $\hat\beta_1$ = `r round(b1, 4)`.** Each extra kilometre lowers the expected price by about `r round(-b1, 3)` euros, so every 10,000 km costs about `r format(round(-b1*10000), big.mark=",")` euros.
-* **Intercept, $\hat\beta_0$ = `r format(round(b0), big.mark=",")`.** The predicted price of a car with 0 km, roughly a nearly new car. But only `r sum(cars_raw$Km < 10000)` car has under 10,000 km, so this is an extrapolation and not very meaningful on its own.
+* **Slope, $\hat\beta_1$ = `r round(b1, 4)`.** Each extra kilometer lowers the expected price by about `r round(-b1, 3)` euros, so every 10,000 km costs about `r format(round(-b1*10000), big.mark=",")` euros.
+* **Intercept, $\hat\beta_0$ = `r format(round(b0), big.mark=",")`.** The predicted price of a car with 0 km, roughly a nearly new car. But no car in the cleaned dataset has under 10,000 km, so this is not very meaningful.
 
 **T-statistics: Are the parameters significant?**
 
@@ -73,11 +73,11 @@ $$t = \frac{\hat\beta_j}{SE(\hat\beta_j)}$$
 It counts how many standard errors the estimate lies from zero. If $|t| > 1.96$ (roughly 2), the p-value is below 0.05 and we reject $H_0$ at the 5% level.
 
 * **Kilometers:** $t$ = `r round(t1, 2)`, which is far beyond ±1.96, so the p-value is essentially 0 (2.956e-08). We reject the null hypothesis that mileage does not affect price.
-* **Intercept:** $t$ = `r round(t0, 2)`, with p essentially 0 (2e-16), so we reject the null hypothesis that the predicted price of a car with no km is 0. The intercept shows the predicted price of a car with 0 km, roughly a nearly new car. But only one car has under 10,000 km, so this is an extrapolation and not very meaningful on its own.
+* **Intercept:** $t$ = `r round(t0, 2)`, with p essentially 0 (2e-16), so we reject the null hypothesis that the predicted price of a car with no km is 0. The intercept shows the predicted price of a car with 0 km, roughly a nearly new car.
 
 **R² and the F-value**
 
-* **R² = `r round(s_a$r.squared, 3)`.** Kilometres alone explain about `r round(100*s_a$r.squared)`% of the price differences, so about `r round(100*(1-s_a$r.squared))`% is due to other factors.
+* **R² = `r round(s_a$r.squared, 3)`.** Kilometers alone explain about `r round(100*s_a$r.squared)`% of the price differences, so about `r round(100*(1-s_a$r.squared))`% is due to other factors.
 * **F = `r round(s_a$fstatistic[1], 2)`.** The F-test checks whether all slope coefficients are zero at once. Since the p-value is essentially 0 (2.956e-08), the model has significant explanatory power.
 
 ---
@@ -122,8 +122,8 @@ plot(cars_clean$Km, cars_clean$residuals_m1,
 abline(h = 0, lty = 2, col = "red")
 ```
 
-- **Visual Evidence:** The residuals are evenly scattered around the zero horizontal reference line without a pronounced parabolic structure. Visually, there is no strong evidence of non-linearity.
-- **Causes of Potential Non-Linearity:** Non-linear mileage effects can arise if depreciation rates flatten out at high mileage (diminishing marginal price drops) or if omitted factors such as age and engine performance confound the mileage-price relationship.
+- **Visual Evidence:** The residuals shows a slight U shape (non-linear effect): This shows that low-mileage and externally high-mileage cars on average sit above zero, while the middle-mileage cars are below, suggesting that the prices falls fast in the first kilometers then flattens out.
+- **Causes of Potential Non-Linearity:** An omitted variable could cause this non-linear effect: Most likely age/year of the car as the older the car the more kilometers it will have. Another possible reason could be if depreciation rates flatten out at high mileage.
 
 ### Statistical Test for Non-Linearity
 To test for non-linearity statistically, we express mileage in thousands ($km\_thousands = \frac{\text{Km}}{1000}$) and estimate a quadratic model:
@@ -163,7 +163,7 @@ summary(m_full)
 In `m_full`, only **Kilometers (`Km`)**, **Horsepower (`HP`)**, **Manufacturing Year (`Year`)**, and **Fuel Type (`Gas`)** exhibit statistically significant $p$-values ($p < 0.05$). Features such as $\text{CC}$, $\text{ABS}$, $\text{ABD}$, $\text{CD}$, $\text{AW}$, $\text{AC}$, and $\text{MP}$ are individually insignificant.
 
 ### Final Complete Model (`m_comp`)
-Excluding the statistically insignificant variables, our refined complete model focuses on the core significant drivers of car price:
+Excluding the statistically insignificant variables, our refined complete model focuses on the statistically significant drivers of car price:
 
 $$\text{Price}_i = \beta_0 + \beta_1 \text{Km}_i + \beta_2 \text{HP}_i + \beta_3 \text{Year}_i + \beta_4 \text{Gas}_i + \varepsilon_i$$
 
@@ -302,41 +302,30 @@ Accounting for heteroskedasticity means that we allow for the variance of the er
 
 The robust standard errors are larger for Km and the Year (by about 7 - 9%) and for HP (by about 28%). Their t-statistics therefore fall and their p-values rise. For Gas, the robust SE is marginally smaller (-1.8%), so its p-value falls slightly.
 
-Overall, the differences are small so every coefficient remains significant at the 1% level under robust SEs, so our conclusions on significance do not change. Since we found evidence of Heteroskedasticity above, we should use the robust standard errors.
+Overall, the differences are small so every coefficient remains significant at the 1% level under robust SEs, so our conclusions on significance do not change. Since we found evidence of heteroskedasticity above, we should use the robust standard errors.
 
 ---
 
 ## (g) Executive Report for Used-Car Sales Management
 
-**To:** General Manager, Used-Car Sales  
-**From:** Econometrics & Analytics Team  
-**Date:** October 2026  
-**Subject:** Vehicle Valuation & Future Market Strategy  
-
----
-
 ### Executive Summary
 Our econometric regression analysis ($R^2 = 85.95\%$) indicates that while mileage steadily reduces vehicle values, baseline vehicle specifications, specifically **fuel type, engine power, and model age**, drive the main price premiums in the used car market.
-
----
 
 ### Statistical Findings & Actionable Recommendations
 
 1. **Prioritize Diesel Inventory Sourcing**
-   - *Statistical Evidence:* Holding mileage, power, and age constant, we can be very confident gasoline cars sell for around **€3,964 less** than equivalent diesel models ($p < 0.001$).
-   - *Action:* When buying stock, a diesel is the better purchase as long as it costs us less than about **€4,000** more than an equivalent petrol car, because we can expect to recover that premium when we sell.  When pricing our own stock, diesel cars can carry an asking price around **€4,000** above comparable petrol cars.
+   - *Statistical Evidence:* Holding mileage, power, and age constant, we can be confident gasoline cars sell for around **€3,964 less** than equivalent diesel models ($p-value < 0.001$).
+   - *Action:* When buying stock, a diesel is the better purchase as long as it costs us less than about **€4,000** more than an equivalent petrol car, because we can expect to recover that premium when we sell.
    
 2. **Market High-Horsepower Trims Prominently**
-   - *Statistical Evidence:* Each additional unit of horsepower increases selling price by **€77.74** ($p < 0.001$).
-   - *Action:* If cars have a higher HP, be sure to use this as a markup premium, as we have seen that customers consistently pay more for cars with higher horsepower.
+   - *Statistical Evidence:* Each additional unit of horsepower increases selling price by **€77.74** ($p-value < 0.001$).
+   - *Action:* If cars have a higher HP, be sure to use this as a markup premium, as customers consistently pay more for cars with higher horsepower.
 
 3. **Value Model Age Over Low Mileage**
-   - *Statistical Evidence:* Each year newer adds around **€1,189** to car price ($p < 0.001$), while each 1000 km takes off around **€37**. This means that one extra design year is therefore worth roughly as much as 32,000 fewer kilometres. 
+   - *Statistical Evidence:* Each year newer adds around **€1,189** to car price ($p-value < 0.001$), while each 1000 km takes off around **€37**. This means that one extra design year is therefore worth roughly as much as 32,000 fewer kilometers. 
    
-   - *Action:* When sourcing stock, prioritize newer model years even if they carry moderately higher mileage over older, low kilometres units. When pricing, don’t discount newer cars heavily for high mileage, because buyers pay mainly for design year.
+   - *Action:* When sourcing stock, prioritize newer model years even if they carry moderately higher mileage over older, low mileage units. When pricing, keep in mind buyers pay mainly for design year.
 
 4. **Avoid Paying for Non-Essential Additional Features**
-   - *Statistical Evidence:* Optional features including CD players, alloy wheels, air conditioning, ABS, air bags and metallic paint, together with CC **do not display statistically significant price premiums** ($p > 0.05$), either individually or when combined. 
+   - *Statistical Evidence:* Optional features including CD players, alloy wheels, air conditioning, ABS, air bags and metallic paint, together with CC **do not display statistically significant price premiums** ($p-value > 0.05$), either individually or when combined. 
    - *Action:* Do not allocate funding to retrofit accessories, as buyers do not pay a statistically significant premium for these additions.
-
----
